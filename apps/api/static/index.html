@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictive Maintenance Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .gauge-ring { transition: stroke-dashoffset 0.8s ease-in-out; }
+        @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-dark-950 text-gray-100 min-h-screen">
+
+    <nav class="bg-dark-900 border-b border-gray-800 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-semibold text-white">Predictive Maintenance</h1>
+                    <p class="text-xs text-gray-500">NASA CMAPSS Turbofan Engine Degradation</p>
+                </div>
+            </div>
+            <div id="status-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800 text-sm">
+                <span class="w-2 h-2 rounded-full bg-gray-500" id="status-dot"></span>
+                <span id="status-text" class="text-gray-400">Checking...</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-dark-900 rounded-xl border border-gray-800 p-6">
+                <h2 class="text-sm font-medium text-gray-400 mb-4">Generate Sensor Data</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1.5">Engine ID</label>
+                        <select id="engine-id"
+                            class="w-full bg-dark-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1.5">Degradation Level</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setDegradation('healthy')" id="btn-healthy"
+                                class="deg-btn px-3 py-2 text-xs rounded-lg border border-gray-700 bg-dark-950 text-gray-400 hover:border-green-500 hover:text-green-400 transition">
+                                Healthy
+                            </button>
+                            <button onclick="setDegradation('mid')" id="btn-mid"
+                                class="deg-btn px-3 py-2 text-xs rounded-lg border border-blue-500 bg-blue-500/10 text-blue-400 transition">
+                                Mid-life
+                            </button>
+                            <button onclick="setDegradation('critical')" id="btn-critical"
+                                class="deg-btn px-3 py-2 text-xs rounded-lg border border-gray-700 bg-dark-950 text-gray-400 hover:border-red-500 hover:text-red-400 transition">
+                                Critical
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="runPrediction()" id="predict-btn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        Run Prediction
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-dark-900 rounded-xl border border-gray-800 p-6 flex flex-col items-center justify-center">
+                <h2 class="text-sm font-medium text-gray-400 mb-2">Remaining Useful Life</h2>
+                <div class="relative">
+                    <svg class="w-40 h-40" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="#1e293b" stroke-width="8"/>
+                        <circle id="rul-ring" cx="60" cy="60" r="52" fill="none" stroke="#3b82f6" stroke-width="8"
+                            stroke-dasharray="326.73" stroke-dashoffset="326.73" stroke-linecap="round"
+                            transform="rotate(-90 60 60)" class="gauge-ring"/>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span id="rul-value" class="text-3xl font-bold text-white">--</span>
+                        <span class="text-xs text-gray-500">cycles</span>
+                    </div>
+                </div>
+                <p id="rul-label" class="text-sm text-gray-500 mt-2">Awaiting prediction</p>
+            </div>
+
+            <div class="bg-dark-900 rounded-xl border border-gray-800 p-6 flex flex-col items-center justify-center">
+                <h2 class="text-sm font-medium text-gray-400 mb-2">Failure Probability</h2>
+                <div class="relative">
+                    <svg class="w-40 h-40" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="#1e293b" stroke-width="8"/>
+                        <circle id="fail-ring" cx="60" cy="60" r="52" fill="none" stroke="#6366f1" stroke-width="8"
+                            stroke-dasharray="326.73" stroke-dashoffset="326.73" stroke-linecap="round"
+                            transform="rotate(-90 60 60)" class="gauge-ring"/>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span id="fail-value" class="text-3xl font-bold text-white">--</span>
+                        <span class="text-xs text-gray-500">probability</span>
+                    </div>
+                </div>
+                <p id="fail-label" class="text-sm text-gray-500 mt-2">Next 30 cycles</p>
+            </div>
+        </div>
+
+        <div id="result-panel" class="hidden fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-dark-900 rounded-xl border border-gray-800 p-5">
+                    <p class="text-xs text-gray-500 mb-1">Alert Level</p>
+                    <div class="flex items-center gap-2">
+                        <span id="alert-dot" class="w-3 h-3 rounded-full bg-gray-600"></span>
+                        <span id="alert-level" class="text-lg font-semibold text-white">--</span>
+                    </div>
+                </div>
+                <div class="bg-dark-900 rounded-xl border border-gray-800 p-5">
+                    <p class="text-xs text-gray-500 mb-1">Anomaly Score</p>
+                    <span id="anomaly-score" class="text-lg font-semibold text-white">--</span>
+                    <span id="anomaly-level" class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">--</span>
+                </div>
+                <div class="bg-dark-900 rounded-xl border border-gray-800 p-5 md:col-span-2">
+                    <p class="text-xs text-gray-500 mb-1">Recommended Action</p>
+                    <p id="action-text" class="text-sm text-gray-300">--</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-dark-900 rounded-xl border border-gray-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-medium text-gray-400">Alert History</h2>
+                    <button onclick="loadAlerts()" class="text-xs text-blue-400 hover:text-blue-300 transition">Refresh</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-xs text-gray-500 border-b border-gray-800">
+                                <th class="text-left py-2 pr-4">Engine</th>
+                                <th class="text-left py-2 pr-4">Time</th>
+                                <th class="text-left py-2 pr-4">Level</th>
+                                <th class="text-left py-2 pr-4">Failure Prob</th>
+                                <th class="text-left py-2">Anomaly</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alerts-body">
+                            <tr><td colspan="5" class="py-8 text-center text-gray-600">No alerts yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-dark-900 rounded-xl border border-gray-800 p-6">
+                <h2 class="text-sm font-medium text-gray-400 mb-4">Model Training</h2>
+                <div class="space-y-3 mb-4">
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" id="chk-forecast" checked class="rounded border-gray-600 bg-dark-950 text-blue-600">
+                        Forecast (LightGBM)
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" id="chk-failure" checked class="rounded border-gray-600 bg-dark-950 text-blue-600">
+                        Failure Classifier (LightGBM)
+                    </label>
+
+                </div>
+                <button onclick="triggerTraining()" id="train-btn"
+                    class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 rounded-lg text-sm transition border border-gray-700 disabled:opacity-50">
+                    Start Training
+                </button>
+                <div id="train-status" class="mt-3 text-xs text-gray-500 hidden"></div>
+            </div>
+        </div>
+
+        <div class="bg-dark-900 rounded-xl border border-gray-800 p-6">
+            <h2 class="text-sm font-medium text-gray-400 mb-4">Infrastructure Services</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <a id="link-apidocs" href="/docs" target="_blank"
+                    class="group flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-800 bg-dark-950 hover:border-blue-500 hover:bg-blue-500/5 transition">
+                    <svg class="w-8 h-8 text-blue-400 group-hover:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                    <span class="text-xs text-gray-400 group-hover:text-white transition">API Docs</span>
+                    <span class="text-[10px] text-gray-600">Swagger UI</span>
+                </a>
+                <a id="link-mlflow" href="" target="_blank"
+                    class="group flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-800 bg-dark-950 hover:border-purple-500 hover:bg-purple-500/5 transition">
+                    <svg class="w-8 h-8 text-purple-400 group-hover:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    <span class="text-xs text-gray-400 group-hover:text-white transition">MLflow</span>
+                    <span class="text-[10px] text-gray-600">Experiment Tracking</span>
+                </a>
+                <a id="link-minio" href="" target="_blank"
+                    class="group flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-800 bg-dark-950 hover:border-orange-500 hover:bg-orange-500/5 transition">
+                    <svg class="w-8 h-8 text-orange-400 group-hover:text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    <span class="text-xs text-gray-400 group-hover:text-white transition">MinIO</span>
+                    <span class="text-[10px] text-gray-600">Object Storage</span>
+                </a>
+                <a id="link-prometheus" href="" target="_blank"
+                    class="group flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-800 bg-dark-950 hover:border-red-500 hover:bg-red-500/5 transition">
+                    <svg class="w-8 h-8 text-red-400 group-hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="text-xs text-gray-400 group-hover:text-white transition">Prometheus</span>
+                    <span class="text-[10px] text-gray-600">Metrics</span>
+                </a>
+                <a id="link-grafana" href="" target="_blank"
+                    class="group flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-800 bg-dark-950 hover:border-green-500 hover:bg-green-500/5 transition">
+                    <svg class="w-8 h-8 text-green-400 group-hover:text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <span class="text-xs text-gray-400 group-hover:text-white transition">Grafana</span>
+                    <span class="text-[10px] text-gray-600">Dashboards</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="bg-dark-900 rounded-xl border border-gray-800">
+            <button onclick="toggleDatasetInfo()" class="w-full flex items-center justify-between p-6 text-left">
+                <h2 class="text-sm font-medium text-gray-400">About the Dataset</h2>
+                <svg id="dataset-chevron" class="w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div id="dataset-content" class="hidden px-6 pb-6 space-y-6 fade-in">
+
+                <!-- Overview -->
+                <div>
+                    <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Overview</h3>
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        This platform uses the <span class="text-white font-medium">NASA C-MAPSS</span>
+                        (Commercial Modular Aero-Propulsion System Simulation) dataset, a widely-used benchmark for
+                        predictive maintenance research. It contains simulated run-to-failure sensor readings from
+                        turbofan jet engines. Each engine starts in a healthy state with slight manufacturing variation,
+                        develops a fault during operation, and degrades over successive flight cycles until failure.
+                    </p>
+                </div>
+
+                <!-- Dataset Subset & Numbers -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Subset Used: FD001</h3>
+                        <p class="text-sm text-gray-400 leading-relaxed mb-3">
+                            C-MAPSS has four subsets (FD001-FD004) with varying fault modes and operating conditions.
+                            This platform uses <span class="text-gray-200">FD001</span>: a single fault mode
+                            (<span class="text-gray-200">HPC Degradation</span> &mdash; High-Pressure Compressor wear)
+                            under a single operating condition (sea level, static).
+                        </p>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <p class="text-[10px] text-gray-500 uppercase">Train Engines</p>
+                                <p class="text-lg font-semibold text-white">100</p>
+                                <p class="text-[10px] text-gray-500">20,631 rows total</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <p class="text-[10px] text-gray-500 uppercase">Test Engines</p>
+                                <p class="text-lg font-semibold text-white">100</p>
+                                <p class="text-[10px] text-gray-500">13,096 rows total</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <p class="text-[10px] text-gray-500 uppercase">Cycles / Engine</p>
+                                <p class="text-lg font-semibold text-white">128 - 362</p>
+                                <p class="text-[10px] text-gray-500">avg ~206 cycles</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <p class="text-[10px] text-gray-500 uppercase">RUL Cap</p>
+                                <p class="text-lg font-semibold text-white">125</p>
+                                <p class="text-[10px] text-gray-500">max predicted cycles</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Files -->
+                    <div>
+                        <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Data Files</h3>
+                        <div class="space-y-2.5">
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-mono bg-blue-900/40 text-blue-400 px-1.5 py-0.5 rounded">train_FD001.txt</span>
+                                </div>
+                                <p class="text-xs text-gray-400">100 engines run to complete failure. Each row is one flight cycle with 26 columns: engine_id, cycle number, 3 operational settings, and 21 sensor readings. Used to train both models.</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-mono bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded">test_FD001.txt</span>
+                                </div>
+                                <p class="text-xs text-gray-400">100 engines with recordings cut off at an unknown point before failure. Same 26 columns. The task is to predict how many cycles remain.</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-mono bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded">RUL_FD001.txt</span>
+                                </div>
+                                <p class="text-xs text-gray-400">Ground-truth Remaining Useful Life for each of the 100 test engines (values range from 7 to 145 cycles). Used for evaluation only.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columns / Sensors -->
+                <div>
+                    <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Columns Per Row (26 total)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                            <p class="text-[10px] text-gray-500 uppercase mb-1.5">Identifiers (2)</p>
+                            <p class="text-xs text-gray-400"><span class="font-mono text-gray-300">engine_id</span> &mdash; which engine (1-100)</p>
+                            <p class="text-xs text-gray-400"><span class="font-mono text-gray-300">cycle</span> &mdash; flight cycle number</p>
+                        </div>
+                        <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                            <p class="text-[10px] text-gray-500 uppercase mb-1.5">Operational Settings (3)</p>
+                            <p class="text-xs text-gray-400"><span class="font-mono text-gray-300">op1, op2, op3</span> &mdash; flight regime parameters (altitude, Mach number, throttle resolver angle). In FD001 these are near-constant since there is only one operating condition.</p>
+                        </div>
+                        <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                            <p class="text-[10px] text-gray-500 uppercase mb-1.5">Sensor Readings (21)</p>
+                            <p class="text-xs text-gray-400"><span class="font-mono text-gray-300">s1-s21</span> &mdash; physical measurements from different engine modules. See sensor detail table below.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sensor Detail Table -->
+                <div>
+                    <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Sensor Detail (14 selected for modeling)</h3>
+                    <p class="text-xs text-gray-500 mb-2">Sensors s1, s5, s6, s10, s16, s18, s19 are excluded &mdash; they show near-zero variance in FD001 and carry no useful degradation signal.</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead>
+                                <tr class="text-[10px] text-gray-500 border-b border-gray-800 uppercase">
+                                    <th class="text-left py-2 pr-3">Sensor</th>
+                                    <th class="text-left py-2 pr-3">Description</th>
+                                    <th class="text-left py-2 pr-3">Unit</th>
+                                    <th class="text-left py-2">Engine Module</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-400">
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s2</td><td class="pr-3">Total temperature at LPC outlet</td><td class="pr-3">&deg;R</td><td>LPC</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s3</td><td class="pr-3">Total temperature at HPC outlet</td><td class="pr-3">&deg;R</td><td>HPC</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s4</td><td class="pr-3">Total temperature at LPT outlet</td><td class="pr-3">&deg;R</td><td>LPT</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s7</td><td class="pr-3">Total pressure at HPC outlet</td><td class="pr-3">psia</td><td>HPC</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s8</td><td class="pr-3">Physical fan speed</td><td class="pr-3">rpm</td><td>Fan</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s9</td><td class="pr-3">Physical core speed</td><td class="pr-3">rpm</td><td>Core</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s11</td><td class="pr-3">Static pressure at HPC outlet</td><td class="pr-3">psia</td><td>HPC</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s12</td><td class="pr-3">Ratio of fuel flow to Ps30</td><td class="pr-3">pps/psi</td><td>Burner</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s13</td><td class="pr-3">Corrected fan speed</td><td class="pr-3">rpm</td><td>Fan</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s14</td><td class="pr-3">Corrected core speed</td><td class="pr-3">rpm</td><td>Core</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s15</td><td class="pr-3">Bypass ratio</td><td class="pr-3">&mdash;</td><td>Bypass</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s17</td><td class="pr-3">Bleed enthalpy</td><td class="pr-3">BTU/s</td><td>Bleed</td></tr>
+                                <tr class="border-b border-gray-800/50"><td class="py-1.5 pr-3 font-mono text-gray-300">s20</td><td class="pr-3">BPR (Burner fuel-air ratio)</td><td class="pr-3">&mdash;</td><td>Burner</td></tr>
+                                <tr><td class="py-1.5 pr-3 font-mono text-gray-300">s21</td><td class="pr-3">Bleed pressure / HPC pressure</td><td class="pr-3">&mdash;</td><td>Bleed/HPC</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Feature Engineering & Models -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Feature Engineering</h3>
+                        <p class="text-xs text-gray-400 leading-relaxed mb-2">For each of the 14 selected sensors, the pipeline computes:</p>
+                        <ul class="text-xs text-gray-400 space-y-1 list-none">
+                            <li class="flex items-start gap-2"><span class="text-gray-600 mt-0.5">&#9654;</span> <span><span class="text-gray-300">Lag features</span> &mdash; values at t-1, t-3, t-5, t-10 cycles</span></li>
+                            <li class="flex items-start gap-2"><span class="text-gray-600 mt-0.5">&#9654;</span> <span><span class="text-gray-300">Rolling mean &amp; std</span> &mdash; over 5-cycle and 10-cycle windows</span></li>
+                            <li class="flex items-start gap-2"><span class="text-gray-600 mt-0.5">&#9654;</span> <span><span class="text-gray-300">Delta</span> &mdash; cycle-to-cycle change</span></li>
+                            <li class="flex items-start gap-2"><span class="text-gray-600 mt-0.5">&#9654;</span> <span><span class="text-gray-300">Trend slope</span> &mdash; linear regression slope over a 10-cycle rolling window</span></li>
+                            <li class="flex items-start gap-2"><span class="text-gray-600 mt-0.5">&#9654;</span> <span><span class="text-gray-300">Cycle norm</span> &mdash; normalized cycle position (0 to 1) within each engine's lifetime</span></li>
+                        </ul>
+                        <p class="text-xs text-gray-500 mt-2">Total: ~127 features per row after engineering.</p>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">What the Models Predict</h3>
+                        <div class="space-y-3">
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-mono bg-blue-900/40 text-blue-400 px-1.5 py-0.5 rounded">RUL Forecast</span>
+                                    <span class="text-[10px] text-gray-600">LightGBM Regressor</span>
+                                </div>
+                                <p class="text-xs text-gray-400">Predicts the <span class="text-gray-200">Remaining Useful Life (RUL)</span> in flight cycles &mdash; how many more cycles the engine can operate before failure. Capped at 125 cycles (engines far from failure are all labeled 125 to reduce noise).</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-mono bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded">Failure Classifier</span>
+                                    <span class="text-[10px] text-gray-600">LightGBM Binary</span>
+                                </div>
+                                <p class="text-xs text-gray-400">Predicts the <span class="text-gray-200">probability of failure within the next 30 cycles</span>. A binary classification where RUL &le; 30 is labeled as "imminent failure". The output is a probability (0-100%).</p>
+                            </div>
+                            <div class="bg-dark-950 rounded-lg p-3 border border-gray-800">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-mono bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded">Anomaly Detection</span>
+                                    <span class="text-[10px] text-gray-600">Threshold-based</span>
+                                </div>
+                                <p class="text-xs text-gray-400">Compares the predicted RUL against learned thresholds to compute an anomaly score. Levels: <span class="text-green-400">low</span>, <span class="text-yellow-400">medium</span>, or <span class="text-red-400">high</span>. High anomaly scores trigger alerts.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="border-t border-gray-800 mt-12 py-6 text-center text-xs text-gray-600">
+        Predictive Maintenance Platform &middot; NASA CMAPSS FD001 &middot; LightGBM + PatchTST &middot; FastAPI + Prefect + MLflow
+    </footer>
+
+    <script>
+        let selectedDegradation = 'mid';
+        const API = '';
+
+        async function checkHealth() {
+            try {
+                const res = await fetch(`${API}/v1/health`);
+                const data = await res.json();
+                const dot = document.getElementById('status-dot');
+                const text = document.getElementById('status-text');
+                if (data.models_loaded) {
+                    dot.className = 'w-2 h-2 rounded-full bg-green-500';
+                    text.textContent = 'Models loaded';
+                    text.className = 'text-green-400';
+                } else {
+                    dot.className = 'w-2 h-2 rounded-full bg-yellow-500';
+                    text.textContent = 'Models not loaded';
+                    text.className = 'text-yellow-400';
+                }
+            } catch {
+                document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-red-500';
+                document.getElementById('status-text').textContent = 'API unreachable';
+                document.getElementById('status-text').className = 'text-red-400';
+            }
+        }
+
+        function setDegradation(level) {
+            selectedDegradation = level;
+            document.querySelectorAll('.deg-btn').forEach(btn => {
+                btn.className = 'deg-btn px-3 py-2 text-xs rounded-lg border border-gray-700 bg-dark-950 text-gray-400 transition';
+            });
+            const colors = { healthy: 'green', mid: 'blue', critical: 'red' };
+            const c = colors[level];
+            const btn = document.getElementById(`btn-${level}`);
+            btn.className = `deg-btn px-3 py-2 text-xs rounded-lg border border-${c}-500 bg-${c}-500/10 text-${c}-400 transition`;
+        }
+
+        function setGauge(ringId, fraction, color) {
+            const circ = 326.73;
+            const offset = circ * (1 - Math.min(fraction, 1));
+            const ring = document.getElementById(ringId);
+            ring.style.strokeDashoffset = offset;
+            ring.style.stroke = color;
+        }
+
+        async function runPrediction() {
+            const btn = document.getElementById('predict-btn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+
+            try {
+                const engineId = parseInt(document.getElementById('engine-id').value) || 1;
+
+                const genRes = await fetch(`${API}/v1/generate-sample`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ engine_id: engineId, degradation: selectedDegradation })
+                });
+                const genData = await genRes.json();
+
+                btn.textContent = 'Scoring...';
+
+                const scoreRes = await fetch(`${API}/v1/score-window`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ engine_id: engineId, window: genData.window })
+                });
+
+                if (!scoreRes.ok) {
+                    const err = await scoreRes.json();
+                    throw new Error(err.detail || 'Scoring failed');
+                }
+
+                const result = await scoreRes.json();
+                displayResult(result);
+                loadAlerts();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Run Prediction';
+            }
+        }
+
+        function displayResult(r) {
+            const maxRul = 125;
+            const rulFrac = r.forecast / maxRul;
+            let rulColor = '#22c55e';
+            if (r.forecast < 30) rulColor = '#ef4444';
+            else if (r.forecast < 60) rulColor = '#f59e0b';
+
+            setGauge('rul-ring', rulFrac, rulColor);
+            document.getElementById('rul-value').textContent = r.forecast.toFixed(0);
+            document.getElementById('rul-label').textContent = `Engine ${r.engine_id}`;
+
+            const failFrac = r.failure_probability_next_30_cycles;
+            let failColor = '#22c55e';
+            if (failFrac > 0.7) failColor = '#ef4444';
+            else if (failFrac > 0.4) failColor = '#f59e0b';
+
+            setGauge('fail-ring', failFrac, failColor);
+            document.getElementById('fail-value').textContent = (failFrac * 100).toFixed(1) + '%';
+
+            const alertColors = {
+                CRITICAL: { dot: 'bg-red-500 animate-pulse-slow', text: 'text-red-400' },
+                WARNING: { dot: 'bg-yellow-500', text: 'text-yellow-400' },
+                NORMAL: { dot: 'bg-green-500', text: 'text-green-400' },
+            };
+            const ac = alertColors[r.alert_level] || alertColors.NORMAL;
+            document.getElementById('alert-dot').className = `w-3 h-3 rounded-full ${ac.dot}`;
+            document.getElementById('alert-level').className = `text-lg font-semibold ${ac.text}`;
+            document.getElementById('alert-level').textContent = r.alert_level;
+
+            document.getElementById('anomaly-score').textContent = r.anomaly_score.toFixed(3);
+            const anomalyEl = document.getElementById('anomaly-level');
+            const anomalyColors = { low: 'bg-green-900 text-green-400', medium: 'bg-yellow-900 text-yellow-400', high: 'bg-red-900 text-red-400' };
+            anomalyEl.className = `ml-2 text-xs px-2 py-0.5 rounded-full ${anomalyColors[r.anomaly_level] || anomalyColors.low}`;
+            anomalyEl.textContent = r.anomaly_level;
+
+            document.getElementById('action-text').textContent = r.recommended_action;
+
+            document.getElementById('result-panel').classList.remove('hidden');
+        }
+
+        async function loadAlerts() {
+            try {
+                const res = await fetch(`${API}/v1/alerts`);
+                const alerts = await res.json();
+                const body = document.getElementById('alerts-body');
+
+                if (alerts.length === 0) {
+                    body.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-600">No alerts yet</td></tr>';
+                    return;
+                }
+
+                body.innerHTML = alerts.slice(0, 10).map(a => {
+                    const levelColors = {
+                        CRITICAL: 'text-red-400 bg-red-900/50',
+                        WARNING: 'text-yellow-400 bg-yellow-900/50',
+                    };
+                    const lc = levelColors[a.alert_level] || 'text-gray-400 bg-gray-800';
+                    const time = new Date(a.timestamp).toLocaleTimeString();
+                    return `<tr class="border-b border-gray-800/50 fade-in">
+                        <td class="py-2.5 pr-4 text-gray-300">${a.engine_id}</td>
+                        <td class="py-2.5 pr-4 text-gray-500">${time}</td>
+                        <td class="py-2.5 pr-4"><span class="px-2 py-0.5 rounded text-xs ${lc}">${a.alert_level}</span></td>
+                        <td class="py-2.5 pr-4 text-gray-300">${(a.failure_probability * 100).toFixed(1)}%</td>
+                        <td class="py-2.5 text-gray-300">${a.anomaly_score.toFixed(3)}</td>
+                    </tr>`;
+                }).join('');
+            } catch { }
+        }
+
+        async function triggerTraining() {
+            const btn = document.getElementById('train-btn');
+            const status = document.getElementById('train-status');
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+
+            const models = [];
+            if (document.getElementById('chk-forecast').checked) models.push('forecast');
+            if (document.getElementById('chk-failure').checked) models.push('failure');
+
+
+            try {
+                const res = await fetch(`${API}/v1/train`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ models, skip_mlflow: false })
+                });
+                const data = await res.json();
+                status.textContent = data.message + ' This may take 1-2 minutes.';
+                status.classList.remove('hidden');
+                status.className = 'mt-3 text-xs text-blue-400';
+
+                const poll = setInterval(async () => {
+                    await checkHealth();
+                    const h = await fetch(`${API}/v1/health`).then(r => r.json());
+                    if (h.models_loaded) {
+                        status.textContent = 'Training complete. Models reloaded.';
+                        status.className = 'mt-3 text-xs text-green-400';
+                        clearInterval(poll);
+                        btn.disabled = false;
+                        btn.textContent = 'Start Training';
+                    }
+                }, 5000);
+
+                setTimeout(() => {
+                    clearInterval(poll);
+                    btn.disabled = false;
+                    btn.textContent = 'Start Training';
+                }, 300000);
+            } catch (e) {
+                status.textContent = 'Error: ' + e.message;
+                status.className = 'mt-3 text-xs text-red-400';
+                status.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Start Training';
+            }
+        }
+
+        function initEngineDropdown() {
+            const select = document.getElementById('engine-id');
+            for (let i = 1; i <= 100; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `Engine ${i}`;
+                if (i === 1) opt.selected = true;
+                select.appendChild(opt);
+            }
+        }
+
+        function initServiceLinks() {
+            const host = window.location.hostname;
+            document.getElementById('link-mlflow').href = `http://${host}:5000`;
+            document.getElementById('link-minio').href = `http://${host}:9001`;
+            document.getElementById('link-prometheus').href = `http://${host}:9090`;
+            document.getElementById('link-grafana').href = `http://${host}:3000`;
+        }
+
+        function toggleDatasetInfo() {
+            const content = document.getElementById('dataset-content');
+            const chevron = document.getElementById('dataset-chevron');
+            content.classList.toggle('hidden');
+            chevron.style.transform = content.classList.contains('hidden') ? '' : 'rotate(180deg)';
+        }
+
+        initEngineDropdown();
+        initServiceLinks();
+        checkHealth();
+        loadAlerts();
+        setInterval(checkHealth, 30000);
+    </script>
+
+</body>
+</html>

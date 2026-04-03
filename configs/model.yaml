@@ -1,0 +1,44 @@
+forecast:
+  name: "lgbm_rul_forecast"
+  type: "lightgbm"
+  params:
+    objective: "regression"
+    metric: "rmse"
+    boosting_type: "gbdt"
+    num_leaves: 63
+    learning_rate: 0.05
+    n_estimators: 500
+    max_depth: 8
+    min_child_samples: 20
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 0.1
+    random_state: 42
+    verbose: -1
+
+failure:
+  name: "lgbm_failure_classifier"
+  type: "lightgbm"
+  params:
+    objective: "binary"
+    metric: "binary_logloss"
+    boosting_type: "gbdt"
+    num_leaves: 63
+    learning_rate: 0.05
+    n_estimators: 500
+    max_depth: 8
+    min_child_samples: 20
+    subsample: 0.8
+    colsample_bytree: 0.8
+    scale_pos_weight: 3.0
+    random_state: 42
+    verbose: -1
+
+anomaly:
+  rolling_std_window: 10
+  score_threshold_warning: 2.0
+  score_threshold_critical: 3.0
+
+failure_threshold:
+  rul_cutoff: 30

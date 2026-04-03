@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml README.md ./
+RUN uv pip install --system ".[dev]"
+
+COPY apps/ apps/
+COPY configs/ configs/
+COPY features/ features/
+COPY models/ models/
+COPY alerts/ alerts/
+COPY monitoring/ monitoring/
+COPY pipelines/ pipelines/
+COPY storage/ storage/
+COPY scripts/ scripts/
+COPY tests/ tests/
+COPY data/artifacts/ data/artifacts/
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

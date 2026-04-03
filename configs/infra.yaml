@@ -1,0 +1,27 @@
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  artifact_location: "s3://mlflow-artifacts"
+
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  bucket: "mlflow-artifacts"
+  secure: false
+
+duckdb:
+  path: "data/features.duckdb"
+
+sqlite:
+  path: "data/alerts.db"
+
+prometheus:
+  port: 9090
+
+prefect:
+  api_url: "http://localhost:4200/api"
